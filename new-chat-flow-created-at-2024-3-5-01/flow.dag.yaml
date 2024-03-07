@@ -9,10 +9,14 @@ inputs:
   question:
     type: string
     is_chat_input: true
+    default: tell me what is staffit
+  customerId:
+    type: string
+    default: "6"
 outputs:
   answer:
     type: string
-    reference: ${chat.output}
+    reference: ${llm_response.output}
     is_chat_output: true
 nodes:
 - name: chat
@@ -21,10 +25,48 @@ nodes:
     type: code
     path: chat.jinja2
   inputs:
-    deployment_name: text-turbo
+    deployment_name: AzureChatDemo
     max_tokens: 256
     temperature: 0.7
     chat_history: ${inputs.chat_history}
+    question: ${inputs.question}
+  connection: azurechatdemo
+  api: chat
+- name: question_embedding
+  type: python
+  source:
+    type: package
+    tool: promptflow.tools.embedding.embedding
+  inputs:
+    connection: azurechatdemo
+    deployment_name: embedding
+    input: ${inputs.question}
+- name: retrieve_documents
+  type: python
+  source:
+    type: code
+    path: retrieve_documents.py
+  inputs:
+    question: ${inputs.question}
+    index_name: azureblob-index
+    embedding: ${question_embedding.output}
+    search: wangheaisearch2
+- name: customer_prompt
+  type: prompt
+  source:
+    type: code
+    path: customer_prompt.jinja2
+  inputs:
+    documentation: ${retrieve_documents.output}
+    history: ${inputs.chat_history}
+- name: llm_response
+  type: llm
+  source:
+    type: code
+    path: llm_response.jinja2
+  inputs:
+    deployment_name: text-turbo
+    prompt_test: ${customer_prompt.output}
     question: ${inputs.question}
   connection: genaistudioopenai
   api: chat
